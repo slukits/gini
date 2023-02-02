@@ -1,0 +1,63 @@
+# GINI Is Not an IDE
+
+But it lets you build one: transparent, user friendly, productive.  
+
+To realize above aims, i.e. to support its users by the creation,
+manipulation and processing of structured (i.e. parsable) text GINI
+implements
+- a context oriented user interface for increased transparency, user
+  friendliness and productivity
+- a simple yet powerful integration into the system to process
+  structured text.
+- a generic parser-engine to define lexer and parser aiding the
+  creation and manipulation of structured text with pretty printing,
+  (code) spell checking, renaming, auto-completion, parameterized
+  skeletons (aka snippets) etc.
+
+Press <space> to activate the context bar at the top.  Press <space>
+again or <esc> to deactivate the context bar.  As visual cue for an
+activated context bar you see highlighted characters.  Pressing one of
+these characters changes either into a more specific context or executes
+a feature of GINI.  Try and press 'l' after activating the context bar
+and you are in the 'lines' context.  As you can see the lines-context is
+already activated hence if you type now 'd' GINI will scroll one page
+Down.
+
+Please note 
+- while you can access all features of GINI through the context bar
+  there may be shortcuts reducing the number of key strokes.  E.g.
+  pressing the page-down key on your keyboard also scrolls a page down.
+- instead of using the keyboard you can also use the mouse in the
+  context bar.
+- <space>. switches into the app- or global-context where you can quit
+  GINI; pressing <ctrl>d or <ctrl>c will also quit GINI.
+
+Still here?  Great!  Lets have a closer look at the context bar from
+left to right.
+- l: the lines context as already mentioned
+- c: the columns context for horizontal movement
+- m: the mode-context providing different modes to operate on the current
+  file.
+- *: the file-type context providing features specific to the given file
+  type.
+- / or !: the directory context providing features relative to the
+  current file's or project directory.  Note / is replaced by ! if and
+  only if the focused file was modified.
+- .: the dot switches to the app-context as mentioned above.
+
+If you switch to the global context you see the contexts 'help' and
+'settings' amongst other contexts or commands.  If you select 'help' or
+'settings' the dot at the right side of the context bar changes to
+either ? or # to indicate that you are in the help or settings context.
+Pressing <esc> or <space>? or <space># respectively will terminate the
+help or settings context.  If you activate the context while in help or
+settings context and select a highlighted context, command or ui-element
+you will get either the help or the settings to this element displayed.
+That's it!  Now you should be able to find your way around in GINI.
+
+If you want to learn more about GINI before you dive in, the following
+articles might be interesting:
+- _Why another "editor"_
+- _How is transparency, usability and productivity realize_
+- _editing text with GINI_
+- _parsing and lexing with GINI_

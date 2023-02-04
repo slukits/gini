@@ -2,7 +2,7 @@
 
 Since the implementation of gini in this stage is a proof of concept
 experimenting with new ideas an agile test-driven implementation
-approach was chosen.  I.e. this road map is a meir sketch of the desired
+approach was chosen.  I.e. this road map is a mere sketch of the desired
 behavior whose specifics are precised along the way if an implemented
 feature turns out to be useful.  Typically the description of the
 desired behavior is driven until a point is found which seams easy

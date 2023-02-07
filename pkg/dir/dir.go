@@ -27,31 +27,38 @@ package dir
 
 import (
 	"bytes"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/slukits/gini/pkg/env"
+	"github.com/slukits/gini/pkg/lg"
 )
 
 // Dir provides file-system operation compounded of os-file-system
 // operations.  The zero-type is ready to use.
 type Dir struct {
 
-	// Env instance used for concurrency save logging; Env defaults to
-	// &env.Env{}
-	Env *env.Env
+	// Log is a logger for reporting errors.
+	Log lg.Logger
 
-	// Path of an Dir instance defaulting to Env's working directory.
+	// Lib provides the std-lib functions Dir needs to provide its
+	// features
+	Lib Lib
+
+	// Path of an Dir instance defaulting to Log.Env's working directory.
 	Path string
+
+	initLib bool
 }
 
 func (d *Dir) env() *env.Env {
-	if d.Env == nil {
-		d.Env = &env.Env{}
+	if d.Log.Env == nil {
+		d.Log.Env = &env.Env{}
 	}
-	return d.Env
+	return d.Log.Env
 }
 
 func (d *Dir) path() string {
@@ -61,8 +68,25 @@ func (d *Dir) path() string {
 	return d.Path
 }
 
-// WalkUp returns a closure which goes with each call one directory up
-// starting at given directory d.
+func (d *Dir) lib() Lib {
+	if !d.initLib {
+		d.initLib = true
+		if d.Lib.Caller == nil {
+			d.Lib.Caller = runtime.Caller
+		}
+		if d.Lib.ReadDir == nil {
+			d.Lib.ReadDir = os.ReadDir
+		}
+		if d.Lib.ReadFile == nil {
+			d.Lib.ReadFile = ioutil.ReadFile
+		}
+	}
+	return d.Lib
+}
+
+// WalkUp returns a closure up which goes with each call one directory up
+// starting at given directory d.  up returns nil and false if the last
+// provided directory has no parent directory.
 func (d *Dir) WalkUp() (up func() (*Dir, bool)) {
 	p := d.path()
 	return func() (*Dir, bool) {
@@ -70,12 +94,12 @@ func (d *Dir) WalkUp() (up func() (*Dir, bool)) {
 			return nil, false
 		}
 		p = filepath.Dir(p)
-		return &Dir{Env: d.Env, Path: p}, true
+		return &Dir{Log: d.Log, Path: p}, true
 	}
 }
 
-// Repo walks given Dir d's path up until a directory is found
-// containing a .git directory and returns it along with a true value.
+// Repo walks given Dir d's path up until a directory d is found
+// containing a .git directory and returns d along with a true value.
 // If no such directory is found nil and false is returned.
 func (d *Dir) Repo() (*Dir, bool) {
 	up, _d, next := d.WalkUp(), d, true
@@ -89,23 +113,27 @@ func (d *Dir) Repo() (*Dir, bool) {
 }
 
 // Caller returns the directory of the file containing Caller calling
-// function.  Caller panics if caller can't be determined.
+// function.  Caller calls Log.Fatal if runtime-caller can't be
+// determined.
 func (d *Dir) Caller() *Dir {
-	_, f, _, ok := runtime.Caller(1)
+	_, f, _, ok := d.lib().Caller(1)
 	if !ok {
-		panic("gini: pkg: dir: Caller: cant determine caller stack")
+		d.Log.Fatal(
+			"gini: pkg: dir: Caller: can't determine caller stack")
 	}
 	return &Dir{
-		Env:  d.Env,
+		Log:  d.Log,
 		Path: filepath.Dir(f),
 	}
 }
 
 // Contains returns true if given directory d contains a directory with
-// given name dirName;  otherwise false is returned.
+// given name dirName;  otherwise false is returned.  If given directory
+// d is not readable an error is logged to lg.ERR.
 func (d *Dir) Contains(dirName string) bool {
-	ee, err := os.ReadDir(d.path())
+	ee, err := d.lib().ReadDir(d.path())
 	if err != nil {
+		d.Log.Tof(lg.ERR, "gini: pkg: dir: contains: %v", err)
 		return false
 	}
 	for _, e := range ee {
@@ -121,10 +149,12 @@ func (d *Dir) Contains(dirName string) bool {
 }
 
 // FileContains returns ture if given file fl in given directory d
-// contains given bytes bb; otherwise false is returned.
+// contains given bytes bb; otherwise false is returned.  If fl can't be
+// read an error is logged to lg.ERR.
 func (d *Dir) FileContains(fl string, bb []byte) bool {
-	fbb, err := ioutil.ReadFile(filepath.Join(d.path(), fl))
+	fbb, err := d.lib().ReadFile(filepath.Join(d.path(), fl))
 	if err != nil {
+		d.Log.Tof(lg.ERR, "gini: pkg: dir: file-contains: %v", err)
 		return false
 	}
 	return bytes.Contains(fbb, bb)
@@ -133,4 +163,17 @@ func (d *Dir) FileContains(fl string, bb []byte) bool {
 // String returns given directories d path.
 func (d *Dir) String() string {
 	return d.path()
+}
+
+// Lib provides std-lib functions which may fail.
+type Lib struct {
+
+	// Caller defaults to runtime.Caller and its semantics
+	Caller func(int) (pc uintptr, file string, line int, ok bool)
+
+	// ReadFile defaults to ioutil.ReadFile and its semantics
+	ReadFile func(name string) ([]byte, error)
+
+	// ReadDir defaults to os.ReadDir and its semantics
+	ReadDir func(name string) ([]fs.DirEntry, error)
 }

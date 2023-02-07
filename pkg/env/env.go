@@ -92,6 +92,9 @@ func (e *Env) lib() Lib {
 		if e.Lib.UserHomeDir == nil {
 			e.Lib.UserHomeDir = os.UserHomeDir
 		}
+		if e.Lib.Chdir == nil {
+			e.Lib.Chdir = os.Chdir
+		}
 	}
 	return e.Lib
 }
@@ -177,6 +180,18 @@ func (e *Env) WD() string {
 	return e.wd
 }
 
+// ChWD changes the given environment e's and the executed binary's
+// working directory.
+func (e *Env) ChWD(path string) error {
+	e.lock()
+	defer e.mutex.Unlock()
+	if err := e.lib().Chdir(path); err != nil {
+		return err
+	}
+	e.wd = path
+	return nil
+}
+
 // Conf returns the user config directory.
 func (e *Env) Conf() string {
 	e.lock()
@@ -223,4 +238,5 @@ type Lib struct {
 	Getwd         func() (string, error)
 	UserConfigDir func() (string, error)
 	MkdirAll      func(path string, fm fs.FileMode) error
+	Chdir         func(path string) error
 }

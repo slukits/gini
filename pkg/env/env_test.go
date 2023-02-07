@@ -29,7 +29,6 @@ package env
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"strings"
 	"sync"
@@ -214,6 +213,26 @@ func (e *env) Creates_logging_directory(t *T) {
 	t.True(err == nil)
 }
 
+func (e *env) Errors_if_working_directory_cant_be_changed(t *T) {
+	env := (&Env{}).SetHome(t.FS().Tmp().Path())
+	env.Lib.Chdir = func(path string) error {
+		return errors.New("chdir error mock")
+	}
+	err := env.ChWD("test")
+	t.Contains(err.Error(), "chdir error mock")
+}
+
+func (e *env) Changes_working_directory(t *T) {
+	home := t.FS().Tmp().Path()
+	env := (&Env{}).SetHome(home)
+	env.Lib.Chdir = func(path string) error {
+		t.Eq(path, home)
+		return nil
+	}
+	t.FatalOn(env.ChWD(env.Home()))
+	t.Eq(env.WD(), env.Home())
+}
+
 func fatalMockRecover(t *T, exp string) (Fataler, func()) {
 
 	// fatalerMock must panic to end the execution of the function
@@ -234,38 +253,6 @@ func fatalMockRecover(t *T, exp string) (Fataler, func()) {
 func TestEnv(t *testing.T) {
 	t.Parallel()
 	Run(&env{}, t)
-}
-
-type oserFX struct {
-	userHomeDir   func() (string, error)
-	getwd         func() (string, error)
-	userConfigDir func() (string, error)
-	mkdirAll      func(path string, _ fs.FileMode) error
-}
-
-func (x *oserFX) UserHomeDir() (string, error) {
-	if x.userHomeDir != nil {
-		return x.userHomeDir()
-	}
-	return os.UserHomeDir()
-}
-
-func (x *oserFX) Getwd() (string, error) {
-	if x.getwd != nil {
-		return x.getwd()
-	}
-	return os.Getwd()
-}
-
-func (x *oserFX) UserConfigDir() (string, error) {
-	if x.userConfigDir != nil {
-		return x.userConfigDir()
-	}
-	return os.UserConfigDir()
-}
-
-func (x *oserFX) MkdirAll(path string, fm fs.FileMode) error {
-	return os.MkdirAll(path, fm)
 }
 
 type fatalerMock struct {

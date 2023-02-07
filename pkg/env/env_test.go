@@ -70,27 +70,23 @@ func (s *env) Home_dir_defaults_to_user_s_home_directory(t *T) {
 }
 
 func (s *env) Panics_if_no_home_dir_and_no_fatal_handler(t *T) {
-	os := &oserFX{userHomeDir: func() (string, error) {
+	env := &Env{}
+	env.Lib.UserHomeDir = func() (string, error) {
 		return "", errors.New("err: home-dir mock")
-	}}
-	env := &Env{OS: os}
+	}
 	t.Panics(func() { env.Home() })
 }
 
 func (s *env) Panics_if_fatal_handler_isnt_stopping_execution(t *T) {
-	os := &oserFX{userHomeDir: func() (string, error) {
+	env := &Env{FatalHandler: &fatalerMock{fatal: func(i ...interface{}) {}}}
+	env.Lib.UserHomeDir = func() (string, error) {
 		return "", errors.New("err: home-dir mock")
-	}}
-	fatal := &fatalerMock{fatal: func(i ...interface{}) {}}
-	env := &Env{OS: os, FatalHandler: fatal}
+	}
 	t.Panics(func() { env.Home() })
 }
 
 func (s *env) Fatales_if_no_home_dir_and_fatal_handler(t *T) {
 	ftlExp := "home-dir fatal mock"
-	os := &oserFX{userHomeDir: func() (string, error) {
-		return "", errors.New("err: home-dir mock")
-	}}
 	defer func() {
 		r := recover()
 		if r == nil {
@@ -101,8 +97,24 @@ func (s *env) Fatales_if_no_home_dir_and_fatal_handler(t *T) {
 	fatal := &fatalerMock{fatal: func(i ...interface{}) {
 		panic(ftlExp)
 	}}
-	env := &Env{OS: os, FatalHandler: fatal}
+	env := &Env{FatalHandler: fatal}
+	env.Lib.UserHomeDir = func() (string, error) {
+		return "", errors.New("err: home-dir mock")
+	}
 	env.Home()
+}
+
+func (e *env) Sets_its_home_directory_to_given(t *T) {
+	path := t.FS().Tmp().Path()
+	env := (&Env{}).SetHome(path)
+	t.Eq(path, env.Home())
+}
+
+func (e *env) Setting_home_dir_is_noop_if_zero_str_given(t *T) {
+	var env Env
+	home := env.Home()
+	env.SetHome("")
+	t.Eq(home, env.Home())
 }
 
 func (s *env) Is_not_user_env_if_nil(t *T) {
@@ -111,7 +123,10 @@ func (s *env) Is_not_user_env_if_nil(t *T) {
 
 func (s *env) Fatal_if_is_user_cant_get_home(t *T) {
 	first := true
-	os := &oserFX{userHomeDir: func() (string, error) {
+	ftl, rcv := fatalMockRecover(t, "is-user home-dir fatal mock")
+	defer rcv()
+	env := &Env{FatalHandler: ftl}
+	env.Lib.UserHomeDir = func() (string, error) {
 		if first {
 			first = false
 			home, err := os.UserHomeDir()
@@ -119,10 +134,7 @@ func (s *env) Fatal_if_is_user_cant_get_home(t *T) {
 			return home, nil
 		}
 		return "", errors.New("err: home-dir mock")
-	}}
-	ftl, rcv := fatalMockRecover(t, "is-user home-dir fatal mock")
-	defer rcv()
-	env := &Env{OS: os, FatalHandler: ftl}
+	}
 	env.IsUser()
 }
 
@@ -134,18 +146,18 @@ func (s *env) Is_not_associated_with_an_temp_dir_by_default(t *T) {
 	t.Not.True((&Env{}).IsTemp())
 }
 
-func (s *env) Is_associated_with_an_temp_dir_if_root_set_to_one(t *T) {
-	env := &Env{Root: t.FS().Tmp().Path()}
+func (s *env) Is_associated_with_an_temp_dir_if_home_set_to_one(t *T) {
+	env := (&Env{}).SetHome(t.FS().Tmp().Path())
 	t.True(env.IsTemp())
 }
 
 func (s *env) Fatal_if_no_working_dir_and_fatal_handler(t *T) {
-	os := &oserFX{getwd: func() (string, error) {
-		return "", errors.New("err: working-dir mock")
-	}}
 	ftl, rcv := fatalMockRecover(t, "working-dir fatal mock")
 	defer rcv()
-	env := &Env{OS: os, FatalHandler: ftl}
+	env := &Env{FatalHandler: ftl}
+	env.Lib.Getwd = func() (string, error) {
+		return "", errors.New("err: working-dir mock")
+	}
 	env.WD()
 }
 
@@ -156,25 +168,28 @@ func (s *env) Working_directory_is_os_working_directory(t *T) {
 }
 
 func (s *env) Fatal_if_config_dir_cant_be_determined(t *T) {
-	os := &oserFX{
-		userConfigDir: func() (string, error) {
-			return "", errors.New("err: config-dir mock")
-		},
-		userHomeDir: func() (string, error) {
-			return "", errors.New("err: working-dir mock")
-		},
-	}
 	ftl, rcv := fatalMockRecover(t, "config-dir fatal mock")
 	defer rcv()
-	env := &Env{OS: os, FatalHandler: ftl}
+	env := &Env{FatalHandler: ftl}
+	env.Lib.UserConfigDir = func() (string, error) {
+		return "", errors.New("err: config-dir mock")
+	}
+	env.Lib.UserHomeDir = func() (string, error) {
+		return "", errors.New("err: working-dir mock")
+	}
 	env.Conf()
 }
 
 func (e *env) Config_dir_is_in_home_dir_if_no_os_config(t *T) {
-	os := &oserFX{userConfigDir: func() (string, error) {
+	env := &Env{}
+	env.Lib.UserConfigDir = func() (string, error) {
 		return "", errors.New("err: config-dir mock")
-	}}
-	env := &Env{OS: os}
+	}
+	t.True(strings.HasPrefix(env.Conf(), env.Home()))
+}
+
+func (e *env) Config_dir_is_in_home_dir_if_not_user_home(t *T) {
+	env := (&Env{}).SetHome(t.FS().Tmp().Path())
 	t.True(strings.HasPrefix(env.Conf(), env.Home()))
 }
 
@@ -189,22 +204,9 @@ func (e *env) Logging_dir_is_in_config_dir(t *T) {
 	t.True(strings.HasPrefix(env.Logging(), env.Conf()))
 }
 
-func (e *env) Home_is_set_to_root(t *T) {
-	env := &Env{Root: t.FS().Tmp().Path()}
-	t.Eq(env.Root, env.Home())
-}
-
 func (e *env) Creates_logging_directory(t *T) {
-	// this initialization makes the temporary directory the parent of
-	// the logging directory, hence it will be cleaned up
-	env := &Env{
-		Root: t.FS().Tmp().Path(),
-		OS: &oserFX{userConfigDir: func() (string, error) {
-			return "", errors.New("err: config-dir mock")
-		}},
-	}
-	t.FatalIfNot(t.True(strings.HasPrefix(env.Logging(), env.Root)))
-	env.OS = nil
+	env := (&Env{}).SetHome(t.FS().Tmp().Path())
+	t.FatalIfNot(t.True(strings.HasPrefix(env.Logging(), env.Home())))
 	_, err := os.Stat(env.Logging())
 	t.True(err != nil)
 	t.FatalOn(env.MkLogging())

@@ -41,29 +41,21 @@ var initMutex = sync.Mutex{}
 // GINI instance.  The zero-value is ready to use.
 type Env struct {
 
-	// Root is an environments root directory which defaults to the
-	// users home directory.  Is root set to a different directory but
-	// the users home directory all other directories like Caching,
-	// Config or Logging are created inside Root instead of the user's
-	// caching directory etc.  E.g. for testing it is handy to set Root
-	// to a temporary directory.
-	Root string
-
 	// FatalHandler is used if an Env-instance is unable to operate on
 	// the system in the intended way which by an unset FatalHandler
 	// leads to a panic.
 	FatalHandler Fataler
 
-	// OS provides the os.* functions which may fail and are needed by
-	// an Env-instance.  OS defaults to an instance of an internal type
-	// mapping OSer methods to the corresponding os.* calls.  This
-	// indirection allows to easily mock up error situations.
-	OS OSer
+	// Lib provides the os.* functions which may fail and are needed by
+	// an Env-instance for mock ups.
+	Lib Lib
 
+	home    string
 	wd      string
 	conf    string
 	logging string
 	mutex   *sync.Mutex
+	initLib bool
 }
 
 func (e *Env) initMutex() {
@@ -82,24 +74,38 @@ func (e *Env) lock() {
 	e.mutex.Lock()
 }
 
-// os returns given Env e's os'er initializing it to its default if
-// unset.  NOTE os expects e to be locked, i.e. there may be race
+// lib returns given Env e's lib'er initializing it to its default if
+// unset.  NOTE lib expects e to be locked, i.e. there may be race
 // conditions if not.
-func (e *Env) os() OSer {
-	if e.OS == nil {
-		e.OS = &oser{}
+func (e *Env) lib() Lib {
+	if !e.initLib {
+		e.initLib = true
+		if e.Lib.Getwd == nil {
+			e.Lib.Getwd = os.Getwd
+		}
+		if e.Lib.MkdirAll == nil {
+			e.Lib.MkdirAll = os.MkdirAll
+		}
+		if e.Lib.UserConfigDir == nil {
+			e.Lib.UserConfigDir = os.UserConfigDir
+		}
+		if e.Lib.UserHomeDir == nil {
+			e.Lib.UserHomeDir = os.UserHomeDir
+		}
 	}
-	return e.OS
+	return e.Lib
 }
 
 // IsUser returns true if given Env e's Home directory is the user's
-// home directory; false otherwise.
+// home directory; false otherwise.  Note in the later case all
+// Env-paths like for configuration or logging are created inside e's
+// home directory.
 func (e *Env) IsUser() bool {
 	if e == nil {
 		return false
 	}
 	home := e.Home()
-	user, err := e.os().UserHomeDir()
+	user, err := e.lib().UserHomeDir()
 	if err != nil {
 		e.fatal("gini: Env: no home directory: %w", err)
 	}
@@ -115,19 +121,36 @@ func (e *Env) IsTemp() bool {
 	return strings.HasPrefix(e.Home(), os.TempDir())
 }
 
-// Home returns the content of Root respectively sets Root to its
-// default which is the user's home directory.
+// SetHome allows to change an environments home directory having the
+// consequence that all of the environments paths are created inside
+// that home directory.  I.e. if provided a testing temp-directory we
+// have a unique concurrency save environment, we are sure that the user
+// space is not filled with testing data and that the testing data will
+// be cleaned up after the test.
+func (e *Env) SetHome(path string) *Env {
+	if path == "" {
+		return e
+	}
+	e.lock()
+	defer e.mutex.Unlock()
+	e.home = path
+	return e
+}
+
+// Home returns the environment's home directory which defaults to the
+// user's home directory but may be set differently especially for
+// testing (see [Env.SetHome]).
 func (e *Env) Home() string {
 	e.lock()
 	defer e.mutex.Unlock()
-	if e.Root == "" {
-		home, err := e.os().UserHomeDir()
+	if e.home == "" {
+		home, err := e.lib().UserHomeDir()
 		if err != nil {
 			e.fatal("gini: Env: no home directory: %w", err)
 		}
-		e.Root = home
+		e.home = home
 	}
-	return e.Root
+	return e.home
 }
 
 func (e *Env) fatal(msg string, err error) {
@@ -145,7 +168,7 @@ func (e *Env) WD() string {
 	e.lock()
 	defer e.mutex.Unlock()
 	if e.wd == "" {
-		wd, err := e.os().Getwd()
+		wd, err := e.lib().Getwd()
 		if err != nil {
 			e.fatal("gini: Env: no working directory %w", err)
 		}
@@ -158,15 +181,15 @@ func (e *Env) WD() string {
 func (e *Env) Conf() string {
 	e.lock()
 	if e.conf == "" {
-		conf, err := e.os().UserConfigDir()
-		if err != nil {
-			e.mutex.Unlock()
+		e.mutex.Unlock()
+		conf, err := e.lib().UserConfigDir()
+		if err != nil || !e.IsUser() {
 			conf = e.Home()
-			e.lock()
 		}
+		e.lock()
 		e.conf = filepath.Join(conf, "gini/config")
 	}
-	e.mutex.Unlock()
+	defer e.mutex.Unlock()
 	return e.conf
 }
 
@@ -185,7 +208,7 @@ func (e *Env) Logging() string {
 
 // MkLogging creates the logging directory and errors if MkdirAll errors.
 func (e *Env) MkLogging() error {
-	return e.os().MkdirAll(e.Logging(), 0700)
+	return e.lib().MkdirAll(e.Logging(), 0700)
 }
 
 // Fataler defines the interface for dealing with situation when an
@@ -195,22 +218,9 @@ type Fataler interface {
 	Fatal(...interface{})
 }
 
-// Oser defines the interface of os-operations which may fail and are
-// needed by an environment Env-instance to provide its features.
-type OSer interface {
-	UserHomeDir() (string, error)
-	Getwd() (string, error)
-	UserConfigDir() (string, error)
-	MkdirAll(path string, _ fs.FileMode) error
-}
-
-type oser struct{}
-
-func (oser) UserHomeDir() (string, error) { return os.UserHomeDir() }
-func (oser) Getwd() (string, error)       { return os.Getwd() }
-func (oser) UserConfigDir() (string, error) {
-	return os.UserConfigDir()
-}
-func (oser) MkdirAll(path string, fm fs.FileMode) error {
-	return os.MkdirAll(path, fm)
+type Lib struct {
+	UserHomeDir   func() (string, error)
+	Getwd         func() (string, error)
+	UserConfigDir func() (string, error)
+	MkdirAll      func(path string, fm fs.FileMode) error
 }

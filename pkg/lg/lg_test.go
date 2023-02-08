@@ -65,7 +65,14 @@ func (s *logger) With_temp_env_logs_to_memory_by_default(t *T) {
 
 // memFX returns an in-memory Logger-fixture according to above test.
 func memFX(t *T) *Logger {
-	return &Logger{Env: (&env.Env{}).SetHome(t.FS().Tmp().Path())}
+	lgg := &Logger{Env: (&env.Env{}).SetHome(t.FS().Tmp().Path())}
+
+	// make only the environment working directory change but the
+	// executing binaries.
+	lgg.Env.Lib.Chdir = func(path string) error { return nil }
+	lgg.Env.ChWD(lgg.Env.Home())
+
+	return lgg
 }
 
 func (s *logger) Logs_not_to_memory_if_log_not_exists(t *T) {

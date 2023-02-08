@@ -30,7 +30,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/slukits/gini/pkg/env"
@@ -41,25 +40,6 @@ const tst = "test"
 const tstFl = tst + "." + FileSuffix
 
 type logger struct{ Suite }
-
-func (s *logger) Creates_only_one_initial_mutex(t *T) {
-	// NOTE this is an exceptional white-box test
-	// NOTE this test may block all other tests from initializing their
-	// logger but it doesn't cause any problems.
-	lgg, got, continue_ := &Logger{}, "", make(chan struct{})
-	initMutex.Lock()
-	go func(l *Logger) {
-		continue_ <- struct{}{}
-		l.String("")
-		got = fmt.Sprintf("%T::%[1]v", l.mutex)
-		close(continue_)
-	}(lgg)
-	<-continue_
-	lgg.mutex = &sync.Mutex{}
-	initMutex.Unlock()
-	<-continue_
-	t.Eq(fmt.Sprintf("%T::%[1]v", lgg.mutex), got)
-}
 
 func (s *logger) For_fatal_defaults_to_log_fatal(t *T) {
 	exp := fmt.Sprintf("%T::%[1]p", log.Fatal)
@@ -241,6 +221,10 @@ func (s *logger) Reports_log_file_content(t *T) {
 	lgg.WriteTempLogs = true
 	lgg.To(tst, content)
 	t.Contains(lgg.String(tst), content)
+}
+
+func (s *logger) Reports_zero_content_if_zero_log_name(t *T) {
+	t.Eq("", memFX(t).String(""))
 }
 
 func (s *logger) Reports_failing_log_file_closing(t *T) {

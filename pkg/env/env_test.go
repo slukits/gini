@@ -28,10 +28,8 @@ package env
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 
 	. "github.com/slukits/gounit"
@@ -40,25 +38,6 @@ import (
 type env struct{ Suite }
 
 func (s *env) SetUp(t *T) { t.Parallel() }
-
-func (s *env) Creates_only_one_initial_mutex(t *T) {
-	// NOTE this is an exceptional white-box test
-	// NOTE this test may block all other tests from initializing their
-	// environment but it doesn't cause any problems.
-	env, got, continue_ := &Env{}, "", make(chan struct{})
-	initMutex.Lock()
-	go func(e *Env) {
-		continue_ <- struct{}{}
-		e.Home()
-		got = fmt.Sprintf("%T::%[1]v", e.mutex)
-		close(continue_)
-	}(env)
-	<-continue_
-	env.mutex = &sync.Mutex{}
-	initMutex.Unlock()
-	<-continue_
-	t.Eq(fmt.Sprintf("%T::%[1]v", env.mutex), got)
-}
 
 func (s *env) Home_dir_defaults_to_user_s_home_directory(t *T) {
 	user, err := os.UserHomeDir()

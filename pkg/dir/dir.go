@@ -41,8 +41,9 @@ import (
 // operations.  The zero-type is ready to use.
 type Dir struct {
 
-	// Log is a logger for reporting errors.
-	Log lg.Logger
+	// Log is a logger for reporting errors it defaults to the
+	// zero-logger.
+	Log *lg.Logger
 
 	// Lib provides the std-lib functions Dir needs to provide its
 	// features
@@ -55,7 +56,7 @@ type Dir struct {
 }
 
 func (d *Dir) env() *env.Env {
-	if d.Log.Env == nil {
+	if d.lg().Env == nil {
 		d.Log.Env = &env.Env{}
 	}
 	return d.Log.Env
@@ -66,6 +67,13 @@ func (d *Dir) path() string {
 		d.Path = d.env().WD()
 	}
 	return d.Path
+}
+
+func (d *Dir) lg() *lg.Logger {
+	if d.Log == nil {
+		d.Log = &lg.Logger{}
+	}
+	return d.Log
 }
 
 func (d *Dir) lib() Lib {
@@ -94,7 +102,7 @@ func (d *Dir) WalkUp() (up func() (*Dir, bool)) {
 			return nil, false
 		}
 		p = filepath.Dir(p)
-		return &Dir{Log: d.Log, Path: p}, true
+		return &Dir{Log: d.lg(), Path: p}, true
 	}
 }
 
@@ -118,11 +126,11 @@ func (d *Dir) Repo() (*Dir, bool) {
 func (d *Dir) Caller() *Dir {
 	_, f, _, ok := d.lib().Caller(1)
 	if !ok {
-		d.Log.Fatal(
+		d.lg().Fatal(
 			"gini: pkg: dir: Caller: can't determine caller stack")
 	}
 	return &Dir{
-		Log:  d.Log,
+		Log:  d.lg(),
 		Path: filepath.Dir(f),
 	}
 }
@@ -133,7 +141,7 @@ func (d *Dir) Caller() *Dir {
 func (d *Dir) Contains(dirName string) bool {
 	ee, err := d.lib().ReadDir(d.path())
 	if err != nil {
-		d.Log.Tof(lg.ERR, "gini: pkg: dir: contains: %v", err)
+		d.lg().Tof(lg.ERR, "gini: pkg: dir: contains: %v", err)
 		return false
 	}
 	for _, e := range ee {
@@ -154,7 +162,7 @@ func (d *Dir) Contains(dirName string) bool {
 func (d *Dir) FileContains(fl string, bb []byte) bool {
 	fbb, err := d.lib().ReadFile(filepath.Join(d.path(), fl))
 	if err != nil {
-		d.Log.Tof(lg.ERR, "gini: pkg: dir: file-contains: %v", err)
+		d.lg().Tof(lg.ERR, "gini: pkg: dir: file-contains: %v", err)
 		return false
 	}
 	return bytes.Contains(fbb, bb)

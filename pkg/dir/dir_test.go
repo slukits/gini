@@ -52,7 +52,7 @@ func (s *_Dir) Caller_provides_dir_of_caller_file(t *T) {
 }
 
 func (s *_Dir) Fatal_if_caller_cant_be_determined(t *T) {
-	var d Dir
+	d := Dir{Log: &lg.Logger{}}
 	d.Lib.Caller = func(i int) (
 		pc uintptr, file string, line int, ok bool,
 	) {
@@ -85,7 +85,7 @@ func (s *_Dir) Repo_fails_if_not_inside_a_repo(t *T) {
 }
 
 func (s *_Dir) Doesnt_contain_a_dir_if_given_dir_not_readable(t *T) {
-	d := &Dir{Log: lg.Logger{
+	d := &Dir{Log: &lg.Logger{
 		Env: (&env.Env{}).SetHome(t.FS().Tmp().Path())}}
 	d.Lib.ReadDir = func(name string) ([]fs.DirEntry, error) {
 		return nil, errors.New("read-dir error mock")
@@ -93,7 +93,7 @@ func (s *_Dir) Doesnt_contain_a_dir_if_given_dir_not_readable(t *T) {
 	t.Not.True(d.Contains("blub"))
 }
 
-func logFX(t *T) lg.Logger {
+func logFX(t *T) *lg.Logger {
 
 	// make logger a in-memory logger by setting environments home to a
 	// temporary directory.
@@ -104,7 +104,7 @@ func logFX(t *T) lg.Logger {
 	lgg.Env.Lib.Chdir = func(path string) error { return nil }
 
 	lgg.Env.ChWD(lgg.Env.Home())
-	return lgg
+	return &lgg
 }
 
 func (s *_Dir) Reports_error_if_given_dir_is_not_readable(t *T) {

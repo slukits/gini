@@ -30,6 +30,8 @@ import (
 
 type AContext struct{ Suite }
 
+func (s *AContext) SetUp(t *T) { t.Parallel() }
+
 func (s *AContext) Has_initially_default_content(t *T) {
 	c := &Context{}
 	fx := lines.TermFixture(t.GoT(), 0, c)

@@ -31,6 +31,8 @@ import (
 
 type AView struct{ Suite }
 
+func (s *AView) SetUp(t *T) { t.Parallel() }
+
 func (s *AView) Has_a_context_component(t *T) {
 	vw := &View{}
 	lines.TermFixture(t.GoT(), 0, vw)

@@ -36,11 +36,15 @@ import (
 	"testing"
 
 	"github.com/slukits/gini/cmd/gini/view"
+	"github.com/slukits/gini/pkg/env"
+	"github.com/slukits/gini/pkg/lg"
 	. "github.com/slukits/gounit"
 	"github.com/slukits/lines"
 )
 
 type GINI struct{ Suite }
+
+func (s *GINI) SetUp(t *T) { t.Parallel() }
 
 func (s *GINI) Ui_factory_defaults_to_lines_terminal(t *T) {
 	exp := fmt.Sprintf("%T::%[1]p", lines.Term)
@@ -62,13 +66,12 @@ func (s *GINI) Exits_if_ui_cannot_be_obtained(t *T) {
 	New(init)
 }
 
-func (s *GINI) Passes_non_blocking_on_lines_fixture_for_ui(t *T) {
+func (s *GINI) Initializes_lines_fixture_and_view_on_new(t *T) {
 	var init Init
-	init.Log.Lib.Fatal = func(vv ...interface{}) {
-		panic(vv[0])
-	}
+	var fx *lines.Fixture
 	init.Lines = func(c lines.Componenter) *lines.Lines {
-		return lines.TermFixture(t.GoT(), 0, &view.View{}).Lines
+		fx = lines.TermFixture(t.GoT(), 0, c)
+		return fx.Lines
 	}
 	blockingChan := make(chan struct{})
 	blockingFunc := func(c chan struct{}) {
@@ -81,6 +84,24 @@ func (s *GINI) Passes_non_blocking_on_lines_fixture_for_ui(t *T) {
 	case <-t.Timeout(0):
 		t.Error("controller initialization timed out.")
 	}
+	t.FatalIfNot(t.True(fx != (*lines.Fixture)(nil)))
+	_, ok := fx.Root().(*view.View)
+	t.True(ok)
+}
+
+func (s *GINI) Initially_shows_introductory_help(t *T) {
+	var init Init
+	var fx *lines.Fixture
+	init.Lines = func(c lines.Componenter) *lines.Lines {
+		fx = lines.TermFixture(t.GoT(), 0, c)
+		return fx.Lines
+	}
+	init.Log = lg.Logger{Env: (&env.Env{}).SetHome(t.FS().Tmp().Path())}
+	init.Log.Env.Lib.Chdir = func(path string) error { return nil }
+	t.FatalOn(init.Log.Env.ChWD(init.Log.Env.Home()))
+	New(init)
+	vw := fx.Root().(*view.View)
+	t.Contains(fx.ScreenOf(vw.Context()), "hlp/index.gnh")
 }
 
 func TestGINI(t *testing.T) {

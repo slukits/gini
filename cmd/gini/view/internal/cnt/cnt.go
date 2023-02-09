@@ -19,26 +19,22 @@ You should have received a copy of the GNU General Public License
 along with GINI. If not, see <https://www.gnu.org/licenses/#GPL>.
 */
 
-package view
+/*
+Package cnt provides a gini view's Context and all context-features
+around it.
+*/
+package cnt
 
 import (
-	"testing"
+	"fmt"
 
-	"github.com/slukits/gini/cmd/gini/view/internal/cnt"
-	. "github.com/slukits/gounit"
 	"github.com/slukits/lines"
 )
 
-type AView struct{ Suite }
+const DefaultContent = "hlp/index.gnh"
 
-func (s *AView) Has_a_context_component(t *T) {
-	vw := &View{}
-	lines.TermFixture(t.GoT(), 0, vw)
-	_, ok := vw.Context().(*cnt.Context)
-	t.True(ok)
-}
+type Context struct{ lines.Component }
 
-func TestAView(t *testing.T) {
-	t.Parallel()
-	Run(&AView{}, t)
+func (c *Context) OnInit(e *lines.Env) {
+	fmt.Fprint(e, DefaultContent)
 }

@@ -39,10 +39,19 @@ bar for displayed editable help files is shown:
 package view
 
 import (
+	"github.com/slukits/gini/cmd/gini/view/internal/cnt"
 	"github.com/slukits/lines"
 )
 
 type View struct {
 	lines.Component
 	lines.Stacking
+}
+
+func (v *View) OnInit(e *lines.Env) {
+	v.CC = append(v.CC, &cnt.Context{})
+}
+
+func (v *View) Context() lines.Componenter {
+	return v.CC[0]
 }

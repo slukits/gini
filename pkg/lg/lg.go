@@ -68,16 +68,17 @@ const (
 	SEC = "sec"
 )
 
+var initMutex sync.Mutex
+
 // Logger is a convenience wrapper around the standard-library
 // log-package.  It provides named logs which are created as needed.
 // The zero-Logger is ready to use and logs to the log-package's default
-// logger.  A logger must not be copied.  A Logger also allows to
-// retrieve the content of any named log by using the String method.
-// Finally the Lib-property allows for easy mockups of std-lib-calls.
-// NOTE Lib is initialized to its defaults only once.  While it is
-// possible to mock-up Fatal Logger expects that after the call of Fatal
-// the execution ends, i.e. it will panic in the line after calling
-// Fatal.
+// logger.  A Logger also allows to retrieve the content of any named
+// log by using the String method.  Finally the Lib-property allows for
+// easy mockups of std-lib-calls.  NOTE Lib is initialized to its
+// defaults only once.  While it is possible to mock-up Fatal Logger
+// expects that after the call of Fatal the execution ends, i.e. it will
+// panic in the line after calling Fatal.
 type Logger struct {
 
 	// Env is the environment this logger logs to.  Is Env is nil the
@@ -95,10 +96,19 @@ type Logger struct {
 	// terminate execution.
 	Lib Lib
 
-	mutex   sync.Mutex
+	mutex   *sync.Mutex
 	initLib bool
 
 	ll map[string]*log.Logger
+}
+
+func (l *Logger) lock() {
+	initMutex.Lock()
+	if l.mutex == nil {
+		l.mutex = &sync.Mutex{}
+	}
+	initMutex.Unlock()
+	l.mutex.Lock()
 }
 
 // lib returns library function needed by given Logger l set to their
@@ -129,7 +139,7 @@ func (l *Logger) LibDefaults() Lib { return l.lib() }
 // Writer returns the writer for the log associated with given name
 // which is either a file or a string builder.
 func (l *Logger) Writer(name string) io.Writer {
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	lg := l.ll[name]
 	if lg == nil {
@@ -139,7 +149,7 @@ func (l *Logger) Writer(name string) io.Writer {
 }
 
 func (l *Logger) Flags(name string) int {
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	lg := l.ll[name]
 	if lg == nil {
@@ -166,7 +176,7 @@ func (l *Logger) InMemory(name string) bool {
 // Logger's environment DefaultHandler is used to do the logging which
 // defaults to log.Println.
 func (l *Logger) To(name, msg string) {
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	if l.Env == nil {
 		l.handleDefault(name, msg)
@@ -218,7 +228,7 @@ func (l *Logger) createLogger(name string) *log.Logger {
 // DefaultHandler is used to do the logging which defaults to
 // log.Println(fmt.Sprintf(format, vv...)).
 func (l *Logger) Tof(name, format string, vv ...interface{}) {
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	if l.Env == nil {
 		l.handleDefault(name, fmt.Sprintf(format, vv...))
@@ -232,7 +242,7 @@ func (l *Logger) String(name string) string {
 	if l == nil {
 		return ""
 	}
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	if name == "" {
 		return ""
@@ -277,7 +287,7 @@ func (l *Logger) handleDefault(name, msg string) {
 // Fatal calls given Logger l's FatalHandler which defaults to log.Fatal
 // to given values vv
 func (l *Logger) Fatal(vv ...interface{}) {
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	l.fatal(vv...)
 }
@@ -285,7 +295,7 @@ func (l *Logger) Fatal(vv ...interface{}) {
 // Fatalf logs given values vv formatted according to given format
 // specifier format with fmt.Sprintf to given Logger l's FatalHandler.
 func (l *Logger) Fatalf(format string, vv ...interface{}) {
-	l.mutex.Lock()
+	l.lock()
 	defer l.mutex.Unlock()
 	l.fatal(fmt.Sprintf(format, vv...))
 }

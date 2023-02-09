@@ -35,8 +35,10 @@ import (
 	"sync"
 )
 
+var initMutex = sync.Mutex{}
+
 // Env provides concurrency save access to the runtime environment of a
-// GINI instance.  The zero-value is ready to use and may not be copied.
+// GINI instance.  The zero-value is ready to use.
 type Env struct {
 
 	// FatalHandler is used if an Env-instance is unable to operate on
@@ -52,8 +54,17 @@ type Env struct {
 	wd      string
 	conf    string
 	logging string
-	mutex   sync.Mutex
+	mutex   *sync.Mutex
 	initLib bool
+}
+
+func (e *Env) lock() {
+	initMutex.Lock()
+	if e.mutex == nil {
+		e.mutex = &sync.Mutex{}
+	}
+	initMutex.Unlock()
+	e.mutex.Lock()
 }
 
 // lib returns given Env e's lib'er initializing it to its default if
@@ -116,7 +127,7 @@ func (e *Env) SetHome(path string) *Env {
 	if path == "" {
 		return e
 	}
-	e.mutex.Lock()
+	e.lock()
 	defer e.mutex.Unlock()
 	e.home = path
 	return e
@@ -126,7 +137,7 @@ func (e *Env) SetHome(path string) *Env {
 // user's home directory but may be set differently especially for
 // testing (see [Env.SetHome]).
 func (e *Env) Home() string {
-	e.mutex.Lock()
+	e.lock()
 	defer e.mutex.Unlock()
 	if e.home == "" {
 		home, err := e.lib().UserHomeDir()
@@ -150,7 +161,7 @@ func (e *Env) fatal(msg string, err error) {
 // directory can't be determined.  Note use ChangeWD(newWD) to change
 // the current working directory.
 func (e *Env) WD() string {
-	e.mutex.Lock()
+	e.lock()
 	defer e.mutex.Unlock()
 	if e.wd == "" {
 		wd, err := e.lib().Getwd()
@@ -165,7 +176,7 @@ func (e *Env) WD() string {
 // ChWD changes the given environment e's and the executed binary's
 // working directory.
 func (e *Env) ChWD(path string) error {
-	e.mutex.Lock()
+	e.lock()
 	defer e.mutex.Unlock()
 	if err := e.lib().Chdir(path); err != nil {
 		return err
@@ -176,14 +187,14 @@ func (e *Env) ChWD(path string) error {
 
 // Conf returns the user config directory.
 func (e *Env) Conf() string {
-	e.mutex.Lock()
+	e.lock()
 	if e.conf == "" {
 		e.mutex.Unlock()
 		conf, err := e.lib().UserConfigDir()
 		if err != nil || !e.IsUser() {
 			conf = e.Home()
 		}
-		e.mutex.Lock()
+		e.lock()
 		e.conf = filepath.Join(conf, "gini/config")
 	}
 	defer e.mutex.Unlock()
@@ -192,12 +203,12 @@ func (e *Env) Conf() string {
 
 // Logging returns the logging directory of given environment e.
 func (e *Env) Logging() string {
-	e.mutex.Lock()
+	e.lock()
 	defer e.mutex.Unlock()
 	if e.logging == "" {
 		e.mutex.Unlock()
 		logging := filepath.Join(e.Conf(), "logs")
-		e.mutex.Lock()
+		e.lock()
 		e.logging = logging
 	}
 	return e.logging
